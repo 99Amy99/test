@@ -1,0 +1,582 @@
+
+//管理员具有管理数据库里所有的权限
+system管理员
+sys管理员：可创建数据库
+
+scott:普通用户
+show user查看当前用户
+
+//用户基本操作
+sys as sysdba;//以管理员登录（作为sysdba登录）
+
+show user;//查看当前用户
+
+//管理员密码一定要修改
+alter user sys（用户名） identified by s123（新密码） //修改管理员密码
+
+alter user scott（用户名）account lock; //锁定用户
+alter user scott（用户名）identified by s123;//修改密码
+conn scott/s123 as sysdba;//切换管理员登录，（用于管理员登录，特别是sys管理员）
+alter user scott（用户名）accout unlock;//解锁用户
+conn scott/s123; //登录用户（用于普通用户登录）
+
+
+1.创建用户
+前提:只有管理员或具有创建用户权限的用户
+
+create user 用户名 identified by 密码；//创建用户
+
+注意：新用户必须要具有登录的权限才可以登录
+给用户赋予登录权限（管理员或具有赋权限的这个权限的用户）
+grant 权限（权限：1.登录：connect    2.建表：create table） to 用户
+
+conn (用户名)/（密码）；
+alter user 用户名 identified by 密码；//修改用户密码
+drop user 用户名  [cascade];删除用户 
+ [cascade]：将当前用户下所有有关联的内容全部级联删除（如果不加，则只删除用户）
+
+权限：是指执行特定类型sql命令是访问其它方案对象的权利，包括系统权限和对象权限两种
+
+2.创建用户
+create user 用户名 identified by 密码；
+
+-----给用户户赋予系统权限
+（1）.登录
+	create session 连接数据库的权限
+ 	connect 角色，（拥有create session这个权限）
+（2）.	create table  建表
+	create view 建视图
+	create procedure  建存储过程
+grant create session to 用户名  //赋予登录数据库的权限
+grant create table, create view, create procedure to 用户名 //具有建表 ，建视图，建存储过程的权限
+
+eg. create table aa( //建表
+       id number,
+        name char);
+select * from aa;(用户名); //查看表
+
+-----with admin option 系统权限的级联-------
+案例：管理员赋予A用户连接数据库的权限，并将此权限下放给A用户。
+A---B---C?
+第一步：创建三个用户
+create user A identified by a123;
+create user B identified by a123;
+create user C identified by a123;
+第二步：使用管理员给A用户赋予连接数据库的权限，并下放权限
+grant create session to A with admin option;
+第三步：使用A给B用户登录的权限
+grant create session to B with admin option;
+第四步：让B给C赋予登录的权限，但不是级联
+grant create session to C;
+
+----B的权限被回收时，C是否还有权限呢？
+谁可以回收B的权限？A？管理员？（都可以回收）
+---使用A回收B的系统权限
+revoke create session from B;
+---查看C是否还能登录？ （能登陆）
+conn c/a123;//登录
+ 
+---总结：with admin option；
+1.只要在赋权限是给与with admin option ，那么给用户就可以被赋予的系统权限下放
+2.在级联回收中间一层的系统权限时，被级联赋予系统权限的用户不影响系统权限。
+
+
+-----对象权限：操作其他用户对象的权利，这些包括
+alter 修改		delete 删除	select 查询	insert添加
+update 修改	index 索引	references 引用 	execute  执行
+----怎样给用户赋予对象权限？
+谁可以赋予这个权限？用户本身，管理员
+grant  对象权限  on  数据库对象 to 用户名 [,角色名][,public][,with grant option]
+grant select on scott.aa to A; //将Scott用户下aa的表查看的权限给A
+
+给用户赋予多个对象权限，用“，”隔开
+grant select，delete，update on scott.aa to A; 
+grant all on scott.aa to A; //赋予A操作aa表的所有对象权限
+---回收对象权限？赋予权限的那个用户和管理员
+revoke select，delete，update on scott.aa  from A;
+
+---with grant option 对象权限的级联----
+Scott--A--B?
+grant select on scott.aa to A with grant option; 
+//将Scott用户下aa的表查看的权限给A,并且A可以将查看的权限给B
+grant select on scott.aa to B with grant option; 
+
+A的对象权限被回收后 ，B还能具有对象权限吗？
+谁可以回收A的对象权限呢？scoot和管理员
+revoke selecte on scott.aa from A;
+----(A被回收了，发现B也无法查看Scott中aa表了)
+
+---总结：with grant option；
+1.只要在福泉县是给与with admin grant ，那么 给用户就可以被赋予的对象权限下放
+2.在级联回收中间一层的对象权限时，被级联赋予对象权限的用户将失去对象权限。
+
+权限
+系统权限：操作数据库的权限，登录，建表等等权限
+对象权限：操作别的用户下面对象的权限，这些包括：表，视图，索引，存储过程等等
+
+
+角色 ：具有一系列权限的集合
+分类：预定义角色和自定义角色
+预定义角色：
+---connect角色（具有create session权限）
+grant connect to A;//将角色connect赋予A用户，让A用户可以连接数据库
+grant create session to A;
+---resource角色
+resource角色具有应用开发人员所需要的其他权限，比如建立存储过程、触发器等。
+该角色具有create table,create view,create procedure等等权限集合;
+grant resource to A;//将角色resource赋予A，A就可以进行create table,create view,create procedure等操作
+grant create table,create view,create procedure to A;
+
+总结：创建新用户，创建完成后管理员就可直接赋予这两个角色给用户
+create user bb identified by b123;
+grant connect,resource to bb;
+
+--dba角色
+dba角色具有所有的系统权限，及with admin option选项，
+默认的dba用户为sys和system,他们可以将任何系统权限授予其他用户。
+但是要注意的是dba角色不具备sysdba和sysoper的特权（启动和关闭数据库）
+
+
+自定义角色：自己定义的角色，根据自己的要求来定义
+第一步：创建一个角色
+create role xb; ----创建角色xb
+第二步：给该角色赋予权限
+grant create session,create table,create view to xb;---将这些权限给xb这个角色
+grant select on scott.aa to xb;
+第三步：将xb角色给新用户就可以了
+create user dd identified by dd;
+grant xb to dd;
+
+---删除自定义角色
+drop role 角色名
+eg.  drop role xb;
+
+Oracle表空间：
+	1.避免磁盘空间突然耗竭的风险
+	2.规划数据更灵活
+	3.提高数据库性能
+	4.提高数据库安全性
+创建表空间：
+create tablespace test1(表空间名字) datafile ‘d:\space（已存在的文件夹)\test1.data.dbf’ size 20M autoextend on next 5M Maxsize 500M;
+----autoextend on可以自动扩展空间
+
+查看表空间
+select tablespace_name, allocation_type from dba_tablespaces;
+
+使用表空间
+1.在创建用户时将表空间给用户
+create user 用户名 identified by  密码 dafault tablespace 表空间名 quota 分配的表空间大小 on 表空间名
+create user a1 identified by a123; ---如果不分配 表空间给用户，那么就是默认的users这个表空间
+eg.      create user a2 identified by a123 default tablespace test1 quota 20m on  test1;
+
+2.用户已经建好，修改用户的默认表空间
+alter user 用户 quota 表空间大小 on 表空间名；
+create user a1 identified by a123；
+alter  user a1 quota 10M on test1;
+
+alter user 用户 quota unlimited on 表空间名；
+
+删除表空
+drop tablespace 表空间名字；
+
+创建表
+----字符型
+char(size) 常用于固定长度的设置，例如：身份证号码18位； 查询速度快
+varchar2(size) 常用于可变长度的字符设置，例如：地址，名字； 查询速度稍微慢
+
+----数字型
+number(p,s)
+number:整型，没有限制大小
+number（5）：整型，有效位数为5位
+number（5，2）小数，一共的有效数位是5位，其中小数位数是2位
+
+----日期型
+date
+
+desc 表名：查看表结构
+select * from 表名： 查看表的内容
+create  table aa1 as select * from aa；复制表（将表的结构和内容一起复制）
+ create table aa2 as select * from where 1=2;复制表结构
+insert into aa2 select * from aa; 复制表内容（前提收拾表的结构必须是一致的）
+
+----追加新列
+alter table 表名 add 字段 数据类型
+例如：alter table aa add sex char(2);
+
+----修改列
+alter table 表名 modify 字段 数据类型
+例如：alter table aa modify address varchar2(50)
+
+----修改默认值的设置
+alter table 表名 modify 字段 default 'yyyy';
+例如：alter table aa modify birthday default 'yyyy'
+
+---删除列
+alter table 表名 drop cloumn 字段
+例如：alter table aa drop cloumn address;
+
+约束
+default:默认值
+unique：唯一(值可为空)
+primary key：主键
+foreign key：外键
+check：在一定的范围内
+
+列级定义：是在定义列的同时定义约束
+create table stu(
+id number primary key ,
+name varchar2(5),
+sex char(2) default '男',//default:默认值（男）
+email varchar2(20) unique;//unique：唯一
+score number check(score between 0 and 100);//check(score between 0 and 100):0到100之间
+con number references class(cid));
+
+create table class(
+cid number primary key,
+name char(10));
+
+查看表的约束信息：注意表名区分大小写，Oracle中所有的存储的表名都是默认大写的
+select  table_name,constraint_name,constraint_type,ststus from user_constraint where table_name='表名'；
+
+表级定义：是指在定义了所有列后，再定义约束，注意：not null约束只能在列级上定义
+create table stu(
+id number primary key ,
+name varchar2(5),
+sex char(2),
+con number，
+constraint pk_stu primary key(id),
+constraint fk_class foreign key (con) references class(cid));
+
+alter table 表名 add primary key(主键字段名)；//添加主键
+
+删除主键约束
+alter table 表名 drop primary key[cascade]---只可以删除主键约束
+alter table 表名 drop constraint 约束名；----可以通用删除所有约束
+
+禁用主键
+alter table 表名 disable primary key;
+恢复主键
+alter table 表名 enable primary key;
+
+添加数据
+//添加日期(1):默认日期写法'15-3月-1999'
+insert into aa(date) values('15-3月-1999')；
+日期写法（2）：只有可视化界面打开时有效，关闭以后再打开又要重新设置
+alter session set nls_date_format='yyyy-mm-dd';
+insert into aa values ('1999-1-2');
+日期写法（3）：to_date()转换函数
+insert into aa(date) values (to_date('1999-02-02','yyyy-mm-dd'));
+
+修改
+update 表名   set 字段 =值；//修改全表
+update 表名   set 字段 =值 where 字段 =值;//根据条件删除
+
+删除
+delete from 表名；//删除表
+delete from 表名 where 字段 =值；//根据条件删除
+
+查找
+selete * from 表名；//查询全部信息
+select 字段 from 表名；//查询某些字段
+select * from 表名 where where 字段 =值;//根据条件查询
+
+例子：查询每一个员工的年薪
+select name ,sal*12(年薪) from aa;
+使用别名 ：as
+(1).select name,sal * 12 年薪 from aa;
+(2).select name,sal * 12 as 年薪 from aa;
+----如何处理null值，使用nvl函数来处理
+select sal,comm,sal+comm from aa;----所有的空值进行加减乘除都是空
+select sal,comm,sal+nvl(comm,0) from aa;
+nvl(comm,0)---如果字段comm是空值，那么用0代替，如果不是空值，那么用自己本身代替
+
+----如何连接字符串（||）
+例子：如何显示某人是什么岗位
+select name || '是' || job from aa;
+
+---distinct----过滤掉多余的重复记录只保留一条
+select distinct comm from aa;
+---between---在某个范围(包含边界)
+select * from aa where sal between 2000 and 2500;
+----in(属于若干个孤立值)---
+例子：查询工作是4000，5000，6000的员工
+select * from aa where sal =4000 or sal = 5000 or sal = 6000;---效率高
+select * from aa where sal in（4000，5000，6000）；
+
+----null
+零和null 是不一样的，null表示空值，没有值；零表示一个确定的值
+null不能参与如下运算：<>   !=  =
+null 可以参与如下运算：is 	is not
+select * from emp where comm is not null;
+
+-----order by的用法（以某个字段排序）
+select ... from ... where ... order by ...
+
+查询员工信息，并按工资由高到底排序
+asc:升序。默认的升序
+desc:降序。
+select * from aa order by sal desc;
+
+先按部门由低到高排序，相同的部门中又按工资由低到高排序
+select * from aa order by deptno asc,sal desc;//第二关键字排序只在第一个关键字相同的情况下才起作用，强烈建议第一个字段都指定排序的标准
+
+----模糊查询的用法
+格式：select 字段的集合 from 表名 where 某个字段的名字 like 匹配条件
+%：代表0或者多个字符
+_:代表1个字符
+
+例如：查询名字中带s的员工
+select * from aa where name like '%s%';
+查询名字中首字母带s的员工
+select * from aa where name liake 's%';
+查询名字中第二个字母带s的员工
+select * from aa where name liake '_s%';
+
+----数据分组：max,min,avg,sum,count
+例如：如何显示所有员工最高工资和最低工资
+	select max(sal),min(sal) from aa;
+显示所有员工的平均工资和工资总和？
+	select avg(sal),sun(sal) from aa;
+计算共有多少员工？
+	select count(empno) from aa;
+	select count(*) from aa;
+请显示工资高于平均工资的员工信息；
+	select avg(sal) from aa;
+	select * from aa where sal>(select avg(sal) from aa );
+-----group by 和 having子句
+ having子句用于限制分组显示结果
+语法:
+select...
+from...
+where...
+group by...
+having...
+order by...
+
+例如：如何显示每个部门的平均工资和最高工资
+	select deptno ,avg(sal),max(sal) from aa group by deptno;
+显示每个部门的每种岗位的平均工资和最低工资
+	select deptno,job ,avg(sal),min(sal) from aa group by deptno,job;
+显示平均工资低于4000的部门号和他的平均工资
+select deptno ,avg(sal) from aa group by deptno having avg(sal)<4000;
+显示工资低于4000，部门平均工资低于3000的部门号和部门平均工资
+select deptno ,avg(sal) from aa where sal<4000 group by deptno having avg(sal)<3000; 
+
+-----多表查询----
+select * from aa(表名1),bb(表名2);
+多表查询组成的笛卡尔积
+表1行数 * 表2的行数 = 查询出的行数
+表1列数 + 表2的列数 = 查询出来的列数
+
+select * from aa(表名1),bb(表名2) where aa.deptno = bb.deptno;//两张表需要一个连接条件
+
+select * from aa inner join bb on aa.deptno = bb.deptno;//inner join只查询满足条件对应的结果inner可以省略不写，默认就是内连接
+
+select * from aa a , cc c where a.sal>=c.losal and a.sal>=c.hisal;
+
+思考：三张表做多表查询，需要几个连接条件？
+两个连接条件，也就是说n张表，需要n-1连接条件
+select a.name,a.sal,a.deptno,d.name,c.grade,c.losal,c.hisal 
+from aa a ,dd d ,cc c
+where a.deptno = d.deptno and (a.sal >=c.losal and e.sal<=hisal)
+
+select a.name,a.sal,a.deptno,d.name,c.grade,c.losal,c.hisal 
+from aa a 
+join cc c
+on a.sal >=c.losal and e.sal<=hisal
+join dd d
+on a.deptno = d.deptno
+order by a.sal desc;
+
+select 
+from A
+join B
+on A与B表的连接条件
+join C
+on A,B中任意一张表与C表的连接条件
+where 
+group by
+having
+order by
+
+
+----自连接（把自己的表当做两张以上的表做链接用）----
+---a1当做员工用 ， a2当作上级表用
+select a1.empno,a1.aname,a1.mgr,a2.empno,a2.ename
+from aa  a1,aa a2
+where a1.mgr = a2.empno;
+---注意：能不用自连接完成的查询，尽量不用自连接，因为数据库运行时间一长，自连接就是影响效率
+
+
+----子查询
+子查询是指嵌入在其它sql语句中的select语句，也叫嵌套查询
+----//1.单行子查询
+单行子查询是指只返回一行数据的子查询
+思考：如何显示与Smith同一部门的所有员工
+select * from aa where deptno = （select deptno from aa where name = "smith"）
+and name<>"smith" //oracle 中不等于：!=,<> 推荐用!=
+
+-----//2.多行子查询
+多行子查询指返回多行数据的子查询
+思考：如何显示与Smith，Scott同一部门的所有员工？
+select deptno from aa where name = "smith" or name ="scott";
+select deptno from aa where name  in ("smith","scott");
+
+select * from aa where deptno in (select deptno from aa where name = "smith" or name ="scott") and name <> "smith" or name != "scott";
+
+----//3.多列子查询
+单行子查询是指子查询只返回单列、单行数据
+多行子查询是指返回单列多行数据，都是针对单列而言的
+而多列子查询则是指查询返回多个列数据的子查询语句
+
+思考：如何查询与Smith的部门和岗位完全相同的所有雇员
+
+select deptno,job from aa where name = "smith";
+
+selecct * from aa where (deptno,job) = (select deptno,job from aa where name = "smith")
+and name != "smith";
+
+----//4.在from子句中使用子查询
+思考：如何显示高于自己部门平均工资的员工的信息
+1、先求出每个部门的平均工资
+select e.ename, e.sal,a.avg_sal,e.deptno,a.deptno
+from emp e,
+(select deptno,avg(sal) avg_sal from emp group by deptno) a
+where e.deptno = a.deptno and e.sal > a.avg_sal;
+
+请思考：查找每一个部门工资最高的人和详细资料
+1、先找出每个部门的最高工资是多少
+select  deptno,max(sal) from emp group by deptno
+2、再去每个部门对应找到工资最高的那个人
+select from emp e,(select  deptno,max_sal from emp group by deptno)b
+where e.deptno = b.deptno and e.sal = b.max_sal;
+
+
+外连接：左外连接，右外连接，完全连接
+左外连接：就是以左边的表为准，左边的表完全显示，右边的表去和左边做匹配，
+	能匹配上就是内连接的结果，匹配不上的 就补空
+select * from stu s,exam e where s.id = e.id;----内连接
+
+
+
+
+
+
+PL/SQL
+declare ----声明变量
+  变量  数据类型；
+begin -----执行部分
+        DML（增删改）
+exception ----例外处理
+    例外处理；
+end;
+
+例子1：输出hello，world！
+set serveroutput on; ----设置服务打开
+begin
+     dbms_output.put_line('hello，world！')
+ ----输出语句dbms_output包的名字，包中封装了很多的过程和函数
+-----put_line()内置的输出的一个过程
+end;
+
+例2：根据用户输入的雇员编号，显示盖雇员的名字
+declare
+name varchar2(10); ----声明一个变量，拿来放置雇员的名字
+begin
+     select ename into name from emp where empno = &no;   
+     dbms_output.put_line(name);
+end;
+
+dbms_output.put_line()输出的必须是变量不能是原表的字段
+select  字段名 into 变量，必须将查询的内容放在变量中，让变量进行输出，into来完成
+控制台输入内容使用&名字，&no;
+
+?思考如何根据用户输入的雇员编号，显示该雇员的名字，薪水，部门号?
+declare
+e_name varchar2(10);
+e_sal number;
+e_depton number;
+begin
+     select ename,sal,deptno into e_name,e_sal ,e_depton  from emp where empn = &no;
+      dbms_output.put_line(e_name|| '---'|| e_sal || '---' || e_deptno);
+end;
+
+例3：如果输入雇员编号错误，例外处理(no_data_found)
+declare
+e_name varchar2(10);
+e_sal number;
+e_depton number;
+begin
+     select ename,sal,deptno into e_name,e_sal ,e_depton  from emp where empn = &no;
+      dbms_output.put_line(e_name|| '---'|| e_sal || '---' || e_deptno);
+exception ---例外处理no_data_found是一个内置的例外处理
+       where no_data_found then
+	dbms_output.put_line('输入的雇员编号不存在！')
+end;
+
+
+1、标量类型(scalar)
+ (1)标量定义的案例
+      ①定文一个变长字符串
+       V_ ename varchar2(10);
+      ②定义一个小数范围-9999. 99~9999. 99
+       V_ sal number(6, 2);
+      ③定义一个小数并给一- 个初始植为5.4 :=是p1/sq1 的赋值号
+       V_ _sal2 number(6,2):=5. 4
+      ④定义一个日期类型的数据
+       v_ hiredate date;
+      ⑤定义一个布尔变量(真和假)，不能为空，初始植为false
+        v_ _valid boolean not. _null default false;
+(2)使用%type类型
+标识符名表名.列名%type;
+declare
+e_name emp.ename%type;
+e_sal emp.sal%type;
+e_depton emp.deptno%type;
+begin
+     select ename,sal,deptno into e_name,e_sal ,e_depton  from emp where empn = &no;
+      dbms_output.put_line(e_name|| '---'|| e_sal || '---' || e_deptno);
+exception ---例外处理no_data_found是一个内置的例外处理
+       where no_data_found then
+	dbms_output.put_line('输入的雇员编号不存在！')
+end;
+
+(3) %rowtype
+表示该类型为行数据类型，存储的是一-行数据，--行数据里可以有多列，类似于表里的一-行数据，
+也可以是游标里的- - 行数据，如:
+vs_ row1 表%rowtype;
+vs_ row2 游标%rowtype ; 
+例如:编写--个程序块，接受输入--个部门号，从dept表中显示该部门的名称与所在位置。
+declare
+d_ no NUMBER(2);
+d_ name VARCHAR2(14) ;
+d_ 1oc VARCHAR2 (13);
+begin
+select deptno, dname, loc into d_ no,d_ name,d_ loc from dept where deptno = 10;
+dbms_ output.put_ line(d_ noll'--'lld_ name|l'--'lld_ _loc) ;
+end;
+
+declare
+d_ dept dept%rowtype;
+begin 
+select * into d_ dept from dept where deptno = 10;
+dbms_ output.put_ line (d_ dept.deptnoll'--'lld_ _dept. dname|l'--'I Id_ dept.1oc) ;
+end;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
